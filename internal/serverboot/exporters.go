@@ -42,6 +42,14 @@ const (
 // empty set is none; nil means not chosen.
 type Exporters map[string]bool
 
+func defaultOTLPExporters(signal string, connected bool) Exporters {
+	if connected || strings.TrimSpace(os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")) != "" ||
+		strings.TrimSpace(os.Getenv("OTEL_EXPORTER_OTLP_"+strings.ToUpper(signal)+"_ENDPOINT")) != "" {
+		return Exporters{ExporterOTLP: true}
+	}
+	return Exporters{}
+}
+
 // Has reports whether name is selected.
 func (e Exporters) Has(name string) bool { return e[name] }
 

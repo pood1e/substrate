@@ -513,6 +513,7 @@ func gatheredNames(t *testing.T, reg prometheus.Gatherer) map[string]bool {
 }
 
 func TestMetricsPushEnabled(t *testing.T) {
+	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://collector.test:4317")
 	type want struct{ push, warn bool }
 	tests := []struct {
 		value      string
@@ -880,6 +881,7 @@ func TestSetLogLevel(t *testing.T) {
 }
 
 func TestTracesPushEnabled(t *testing.T) {
+	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://collector.test:4317")
 	tests := []struct {
 		value      string
 		push, warn bool
@@ -898,7 +900,7 @@ func TestTracesPushEnabled(t *testing.T) {
 		prev := slog.Default()
 		slog.SetDefault(slog.New(slog.NewTextHandler(&buf, nil)))
 		t.Setenv(tracesExporterEnv, tt.value)
-		push := tracesPushEnabled(t.Context())
+		push := tracesPushEnabled(t.Context(), false)
 		slog.SetDefault(prev)
 
 		if push != tt.push {

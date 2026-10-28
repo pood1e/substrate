@@ -183,7 +183,7 @@ func InitTracing(ctx context.Context, opts TracingOptions) (*sdktrace.TracerProv
 	// Without an exporter the provider still samples and propagates trace
 	// context, so a component that exports nothing keeps the traces of the
 	// components around it whole.
-	export := tracesPushEnabled(ctx)
+	export := tracesPushEnabled(ctx, opts.ExporterConn != nil)
 	if export {
 		expOpts := []otlptracegrpc.Option{
 			// GKE managed traces doesn't support validating the TLS certs of the collector.
@@ -218,11 +218,11 @@ const (
 // metricsExporters applies OTEL_METRICS_EXPORTER with the shared exporter
 // rules. prometheus, the specification's pull exporter, is known only when
 // pullServed, i.e. the component serves its own /metrics; elsewhere it is
-// skipped as unknown, so a push-only component keeps exporting. Unset selects
-// every exporter the component has.
-func metricsExporters(ctx context.Context, pullServed bool) Exporters {
+// skipped as unknown. The default selects served pull metrics and configured
+// OTLP endpoints or relays.
+func metricsExporters(ctx context.Context, pullServed, connected bool) Exporters {
 	known := []string{ExporterOTLP}
-	def := Exporters{ExporterOTLP: true}
+	def := defaultOTLPExporters("metrics", connected)
 	if pullServed {
 		known = append(known, exporterPrometheus)
 		def[exporterPrometheus] = true
@@ -232,17 +232,15 @@ func metricsExporters(ctx context.Context, pullServed bool) Exporters {
 	return exporters
 }
 
-// metricsPushEnabled reports whether the OTLP reader is installed: while otlp
-// is selected, as it is when the variable is unset.
+// metricsPushEnabled reports whether the selected exporters include OTLP.
 func metricsPushEnabled(ctx context.Context, pullServed bool) bool {
-	return metricsExporters(ctx, pullServed).Has(ExporterOTLP)
+	return metricsExporters(ctx, pullServed, false).Has(ExporterOTLP)
 }
 
 // tracesPushEnabled applies OTEL_TRACES_EXPORTER with the shared exporter
-// rules: the OTLP span exporter is installed while otlp, the default, is
-// selected.
-func tracesPushEnabled(ctx context.Context) bool {
-	return resolveExportersEnv(ctx, tracesExporterEnv, []string{ExporterOTLP}, Exporters{ExporterOTLP: true}).Has(ExporterOTLP)
+// rules: a configured endpoint or relay enables OTLP by default.
+func tracesPushEnabled(ctx context.Context, connected bool) bool {
+	return resolveExportersEnv(ctx, tracesExporterEnv, []string{ExporterOTLP}, defaultOTLPExporters("traces", connected)).Has(ExporterOTLP)
 }
 
 // InitMetrics registers a global MeterProvider with both a Prometheus
@@ -282,7 +280,7 @@ func InitMetricsBridged(ctx context.Context, serviceName string, reg interface {
 	if serviceName == "" {
 		return nil, false, fmt.Errorf("serviceName is required")
 	}
-	exporters := metricsExporters(ctx, true)
+	exporters := metricsExporters(ctx, true, false)
 	servePull = exporters.Has(exporterPrometheus)
 	push := exporters.Has(ExporterOTLP)
 
@@ -368,7 +366,7 @@ func (p skipFamilies) Produce(ctx context.Context) ([]metricdata.ScopeMetrics, e
 // TracingOptions.RelayCapable, implied rather than a parameter because only a
 // caller that has a relay to pass reaches for this function in the first place.
 func InitMetricsPushOnlyVia(ctx context.Context, serviceName string, conn *grpc.ClientConn) (*sdkmetric.MeterProvider, error) {
-	return newMeterProvider(ctx, serviceName, metricsPushEnabled(ctx, false), true, conn, nil)
+	return newMeterProvider(ctx, serviceName, metricsExporters(ctx, false, conn != nil).Has(ExporterOTLP), true, conn, nil)
 }
 
 func newMeterProvider(ctx context.Context, serviceName string, push, relayCapable bool, conn *grpc.ClientConn, producers []sdkmetric.Producer, extraReaders ...sdkmetric.Reader) (*sdkmetric.MeterProvider, error) {

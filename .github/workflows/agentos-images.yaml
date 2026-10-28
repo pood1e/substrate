@@ -3,6 +3,7 @@ name: AgentOS images
 on:
   push:
     branches: ['agentos/**']
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -39,7 +40,7 @@ jobs:
         run: |
           go test -race -count=1 ./cmd/ateapi/internal/apivalidation ./cmd/ateapi/internal/defaults \
             ./cmd/ateapi/internal/controlapi ./internal/ateworker/tunnel ./internal/atunnel/egress \
-            ./cmd/atenet/internal/router/egress
+            ./cmd/atenet/internal/router/egress ./internal/serverboot
           # Network namespace tests need a privileged KVM host.
           go test -race -count=1 ./cmd/ateworker-microvm \
             -skip '^(TestHostActorReplacesSameActor|TestSetupActorTap|TestSetupActorTapReplacesALeftover)$'
@@ -60,6 +61,7 @@ jobs:
           retention-days: 1
 
   images:
+    if: github.event_name != 'pull_request'
     needs: verify
     runs-on: ubuntu-24.04
     permissions:
