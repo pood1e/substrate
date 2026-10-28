@@ -92,4 +92,6 @@ jobs:
           labels: |
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+      - name: Verify the published entrypoint
+        run: docker run --rm "${REGISTRY}/${{ matrix.component }}@${{ steps.build.outputs.digest }}" --help
       - run: echo "${REGISTRY}/${{ matrix.component }}@${{ steps.build.outputs.digest }}" >> "$GITHUB_STEP_SUMMARY"
