@@ -59,6 +59,14 @@ func requirePool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 	containerOnce.Do(func() {
 		ctx := context.Background()
+		if dsn := os.Getenv("SUBSTRATE_TEST_POSTGRES_URL"); dsn != "" {
+			containerDSN = dsn
+			containerPool, containerErr = pgxpool.New(ctx, dsn)
+			if containerErr == nil {
+				containerErr = containerPool.Ping(ctx)
+			}
+			return
+		}
 		if err := dockerenv.Configure(ctx); err != nil {
 			containerErr = err
 			return

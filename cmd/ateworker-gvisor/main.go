@@ -661,6 +661,11 @@ func (s *AteWorkerService) RunWorkload(ctx context.Context, req *ateworkerpb.Run
 			}
 		}
 	}()
+	// Egress is armed before the first container starts (see
+	// ateomtunnel.Tunnel.ActivateEgress); ingress waits for readyz below.
+	if err := s.tunnel.ActivateEgress(workerstats.ActorAttributionFromRequest(req), egress); err != nil {
+		return nil, err
+	}
 	// Create and start pause container. The bundle rootfs is composed here —
 	// an overlay of the node's cached image layers plus the bundle's private
 	// upper — because mounting is ateworker's job (atelet runs with no
@@ -707,7 +712,7 @@ func (s *AteWorkerService) RunWorkload(ctx context.Context, req *ateworkerpb.Run
 	if err := wakeupprobe.WaitAll(ctx, req.GetSpec().GetContainers(), actornet.ActorVethIP, wakeupprobe.DialFunc(s.sandboxDialer(req.GetActorUid()))); err != nil {
 		return nil, fmt.Errorf("while waiting for container wakeup probe: %w", err)
 	}
-	if err := s.tunnel.Activate(workerstats.ActorAttributionFromRequest(req), s.sandboxDialer(req.GetActorUid()), egress); err != nil {
+	if err := s.tunnel.ActivateIngress(workerstats.ActorAttributionFromRequest(req), s.sandboxDialer(req.GetActorUid())); err != nil {
 		return nil, err
 	}
 
@@ -1059,6 +1064,10 @@ func (s *AteWorkerService) RestoreWorkload(ctx context.Context, req *ateworkerpb
 			}
 		}
 	}()
+	// As in RunWorkload: egress from the first packet, ingress after readyz.
+	if err := s.tunnel.ActivateEgress(workerstats.ActorAttributionFromRequest(req), egress); err != nil {
+		return nil, err
+	}
 	checkpointDir := req.GetActorDirs().GetRestoreDir()
 	restoreArgs, err := fsRestoreArgs(checkpointDir, fidelity)
 	if err != nil {
@@ -1152,7 +1161,7 @@ func (s *AteWorkerService) RestoreWorkload(ctx context.Context, req *ateworkerpb
 	if err != nil {
 		return nil, fmt.Errorf("while waiting for container wakeup probe: %w", err)
 	}
-	err = s.tunnel.Activate(attribution, s.sandboxDialer(req.GetActorUid()), egress)
+	err = s.tunnel.ActivateIngress(attribution, s.sandboxDialer(req.GetActorUid()))
 	timing.activate = lap(&tLast)
 	if err != nil {
 		return nil, err

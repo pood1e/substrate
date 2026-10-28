@@ -126,7 +126,7 @@ func MustCreateActor(t *testing.T, ctx context.Context, s store.Interface, actor
 	t.Helper()
 	atespace := actor.GetMetadata().GetAtespace()
 	MustCreateAtespace(t, ctx, s, atespace)
-	created, err := s.CreateActor(ctx, actor)
+	created, err := s.CreateActor(ctx, actor, nil)
 	if err != nil {
 		t.Fatalf("creating test actor %q/%q: %v", atespace, actor.GetMetadata().GetName(), err)
 	}
@@ -176,6 +176,13 @@ func requireAdminPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 	containerOnce.Do(func() {
 		ctx := context.Background()
+		if dsn := os.Getenv("SUBSTRATE_TEST_POSTGRES_URL"); dsn != "" {
+			adminPool, containerErr = pgxpool.New(ctx, dsn)
+			if containerErr == nil {
+				containerErr = adminPool.Ping(ctx)
+			}
+			return
+		}
 		if err := dockerenv.Configure(ctx); err != nil {
 			containerErr = err
 			return

@@ -413,6 +413,11 @@ func (s *AteWorkerService) coldBootActor(ctx context.Context, p actorBootParams)
 			}
 		}
 	}()
+	// Egress is armed before the guest boots (see
+	// ateomtunnel.Tunnel.ActivateEgress); ingress waits for readyz below.
+	if err := s.tunnel.ActivateEgress(p.attribution(), egress); err != nil {
+		return err
+	}
 
 	// Clean stale per-sandbox state before anything touches the host upper dir.
 	// Also  create the runtime dir for the sockets.
@@ -602,7 +607,7 @@ func (s *AteWorkerService) coldBootActor(ctx context.Context, p actorBootParams)
 		slog.Duration("since_boot", time.Since(tBooted)))
 
 	ra := &runningActor{chCmd: chCmd, vfsdCmd: vfsdCmd, apiSocket: apiSocket, baseID: actorUID, guestAgent: ac, workloadIDs: workloadIDs(ctrs)}
-	if err := s.tunnel.Activate(p.attribution(), s.sandboxDialer(p.actorUID), egress); err != nil {
+	if err := s.tunnel.ActivateIngress(p.attribution(), s.sandboxDialer(p.actorUID)); err != nil {
 		return err
 	}
 	s.setRunningVM(actorUID, ra)
